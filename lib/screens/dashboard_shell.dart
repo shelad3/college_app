@@ -5,6 +5,7 @@ import 'tabs/timetable_tab.dart';
 import 'tabs/hub_tab.dart';
 import 'tabs/notes_tab.dart';
 import 'tabs/profile_tab.dart';
+import 'tabs/admin_tab.dart';
 
 class DashboardShell extends StatefulWidget {
   const DashboardShell({super.key});
@@ -16,20 +17,32 @@ class DashboardShell extends StatefulWidget {
 class _DashboardShellState extends State<DashboardShell> {
   int _currentTabIndex = 0;
 
-  final _tabs = const [
-    TimetableTab(),
-    HubTab(),
-    NotesTab(),
-    ProfileTab(),
-  ];
+  List<Widget> _buildTabs(AppState appState) {
+    final tabs = <Widget>[
+      const TimetableTab(),
+      const HubTab(),
+      const NotesTab(),
+      const ProfileTab(),
+    ];
+    if (appState.currentUser?.isSuperAdmin == true) {
+      tabs.add(const AdminTab());
+    }
+    return tabs;
+  }
 
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final lesson = appState.activeLesson;
-    final title = lesson != null
-        ? 'Lesson ${lesson.id}: ${lesson.subjectName}'
-        : 'Dashboard';
+    final isAdmin = appState.currentUser?.isSuperAdmin == true;
+    final title = isAdmin
+        ? 'Admin Panel'
+        : (lesson != null ? 'Lesson ${lesson.id}: ${lesson.subjectName}' : 'Dashboard');
+
+    final tabs = _buildTabs(appState);
+    if (_currentTabIndex >= tabs.length) {
+      _currentTabIndex = 0;
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -92,16 +105,18 @@ class _DashboardShellState extends State<DashboardShell> {
           ],
         ),
       ),
-      body: _tabs[_currentTabIndex],
+      body: tabs[_currentTabIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentTabIndex,
         onTap: (index) => setState(() => _currentTabIndex = index),
         type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Timetable'),
-          BottomNavigationBarItem(icon: Icon(Icons.forum), label: 'Hub'),
-          BottomNavigationBarItem(icon: Icon(Icons.menu_book), label: 'Notes'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+        items: [
+          const BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Timetable'),
+          const BottomNavigationBarItem(icon: Icon(Icons.forum), label: 'Hub'),
+          const BottomNavigationBarItem(icon: Icon(Icons.menu_book), label: 'Notes'),
+          const BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+          if (isAdmin)
+            const BottomNavigationBarItem(icon: Icon(Icons.admin_panel_settings), label: 'Admin'),
         ],
       ),
     );

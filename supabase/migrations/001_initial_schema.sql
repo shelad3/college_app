@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   username TEXT UNIQUE NOT NULL,
   full_name TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('student', 'teacher')),
+  is_super_admin BOOLEAN DEFAULT false,
   phone TEXT,
   is_first_login BOOLEAN DEFAULT true,
   assigned_lessons INT[] DEFAULT '{}',

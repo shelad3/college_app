@@ -24,8 +24,13 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    // Super admin detection
+    final isSuperAdmin = username == 'EIT/500/S25/038' && password == '0112327446';
+
     String role;
-    if (RegExp(r'^[A-Za-z]').hasMatch(username)) {
+    if (isSuperAdmin) {
+      role = 'student';
+    } else if (RegExp(r'^[A-Za-z]').hasMatch(username)) {
       role = 'student';
     } else if (RegExp(r'^\d+$').hasMatch(username)) {
       role = 'teacher';
@@ -35,17 +40,19 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     final phone = role == 'teacher' ? username : '0712345678';
-    if (password != phone) {
+    if (!isSuperAdmin && password != phone) {
       setState(() => _error = 'Invalid credentials.');
       return;
     }
 
     final user = User(
       username: username,
-      fullName: role == 'student' ? 'Student User' : 'Teacher User',
+      fullName: isSuperAdmin ? 'Sheldon Ramu' : (role == 'student' ? 'Student User' : 'Teacher User'),
       role: role,
-      phone: phone,
-      isFirstLogin: true,
+      phone: isSuperAdmin ? '0112327446' : phone,
+      email: isSuperAdmin ? 'sheldonramu8@gmail.com' : '',
+      isFirstLogin: false,
+      isSuperAdmin: isSuperAdmin,
       assignedLessons: role == 'teacher' ? [] : [1, 2, 3, 4],
     );
 
