@@ -1,0 +1,109 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_state.dart';
+import 'tabs/timetable_tab.dart';
+import 'tabs/hub_tab.dart';
+import 'tabs/notes_tab.dart';
+import 'tabs/profile_tab.dart';
+
+class DashboardShell extends StatefulWidget {
+  const DashboardShell({super.key});
+
+  @override
+  State<DashboardShell> createState() => _DashboardShellState();
+}
+
+class _DashboardShellState extends State<DashboardShell> {
+  int _currentTabIndex = 0;
+
+  final _tabs = const [
+    TimetableTab(),
+    HubTab(),
+    NotesTab(),
+    ProfileTab(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final lesson = appState.activeLesson;
+    final title = lesson != null
+        ? 'Lesson ${lesson.id}: ${lesson.subjectName}'
+        : 'Dashboard';
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title),
+      ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: Colors.white24,
+                    child: Icon(Icons.person, color: Colors.white, size: 32),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    appState.currentUser?.fullName ?? 'User',
+                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    appState.currentUser?.role ?? '',
+                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text('LESSONS', style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w600)),
+            ),
+            ...appState.lessons.map((lesson) => ListTile(
+              leading: CircleAvatar(
+                backgroundColor: appState.activeLessonId == lesson.id
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.grey[200],
+                child: Text(
+                  '${lesson.id}',
+                  style: TextStyle(
+                    color: appState.activeLessonId == lesson.id ? Colors.white : Colors.black87,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              title: Text(lesson.subjectName, style: const TextStyle(fontSize: 14)),
+              subtitle: Text(lesson.instructor, style: const TextStyle(fontSize: 12)),
+              selected: appState.activeLessonId == lesson.id,
+              onTap: () {
+                appState.setLesson(lesson.id);
+                Navigator.of(context).pop();
+              },
+            )),
+          ],
+        ),
+      ),
+      body: _tabs[_currentTabIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentTabIndex,
+        onTap: (index) => setState(() => _currentTabIndex = index),
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Timetable'),
+          BottomNavigationBarItem(icon: Icon(Icons.forum), label: 'Hub'),
+          BottomNavigationBarItem(icon: Icon(Icons.menu_book), label: 'Notes'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+        ],
+      ),
+    );
+  }
+}
