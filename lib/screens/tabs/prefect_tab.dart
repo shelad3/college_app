@@ -142,7 +142,7 @@ class _PrefectAnnouncementsTabState extends State<_PrefectAnnouncementsTab> {
               margin: const EdgeInsets.only(bottom: 6),
               child: ListTile(
                 leading: const Icon(Icons.campaign, color: Colors.blue),
-                title: Text(appState.announcements[index], style: const TextStyle(fontSize: 13)),
+                title: Text(appState.announcements[index].content, style: const TextStyle(fontSize: 13)),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete, size: 18, color: Colors.red),
                   onPressed: () => appState.deleteAnnouncement(index),

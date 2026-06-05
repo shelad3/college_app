@@ -7,6 +7,13 @@ import '../models/schedule.dart';
 import '../models/note.dart';
 import '../models/document.dart';
 import '../models/quiz.dart';
+import '../utils/uuid.dart';
+
+class Announcement {
+  final String id;
+  final String content;
+  const Announcement({required this.id, required this.content});
+}
 
 class AppState extends ChangeNotifier {
   AppUser? _currentUser;
@@ -15,8 +22,8 @@ class AppState extends ChangeNotifier {
   List<ScheduleEntry> _schedule = [];
   List<NoteTopic> _notes = [];
   final List<NoteHighlight> _highlights = [];
-  List<String> announcements = [];
-  List<ChatMessage> discussions = [];
+  List<Announcement> _announcements = [];
+  List<ChatMessage> _discussions = [];
   final List<AppUser> _allUsers = [];
   List<AppDocument> _documents = [];
   final List<Quiz> _quizzes = [];
@@ -33,6 +40,8 @@ class AppState extends ChangeNotifier {
   List<Quiz> get quizzes => _quizzes;
   List<QuizAttempt> get quizAttempts => _quizAttempts;
   List<Quiz> get activeQuizzes => _quizzes.where((q) => q.lessonId == _activeLessonId).toList();
+  List<Announcement> get announcements => _announcements;
+  List<ChatMessage> get discussions => _discussions;
   bool get isAdmin => _currentUser?.isSuperAdmin == true;
   bool get isPrefect => _currentUser?.isPrefect == true;
   bool get canManage => isAdmin || isPrefect;
@@ -83,6 +92,7 @@ class AppState extends ChangeNotifier {
       )).toList();
 
       _schedule = (results[1] as List).map((json) => ScheduleEntry(
+        id: json['id'] as String,
         lessonId: json['lesson_id'] as int,
         day: json['day'] as String,
         time: json['time'] as String,
@@ -123,8 +133,13 @@ class AppState extends ChangeNotifier {
       }
       _allLessonsNotes.addAll(byLesson);
 
-      announcements = (results[4] as List).map((j) => j['content'] as String).toList();
-      discussions = (results[5] as List).map((j) => ChatMessage(
+      _announcements = (results[4] as List).map((j) => Announcement(
+        id: j['id'] as String,
+        content: j['content'] as String,
+      )).toList();
+
+      _discussions = (results[5] as List).map((j) => ChatMessage(
+        id: j['id'] as String,
         user: j['user_name'] as String,
         text: j['text'] as String,
         timestamp: DateTime.parse(j['created_at'] as String),
@@ -145,8 +160,8 @@ class AppState extends ChangeNotifier {
       _lessons = [];
       _schedule = [];
       _notes = [];
-      announcements = ['Could not load data from server. Working offline.'];
-      discussions = [];
+      _announcements = [];
+      _discussions = [];
       _documents = [];
       _error = 'Failed to load data: ${e.toString().length > 80 ? e.toString().substring(0, 80) : e.toString()}';
     }
@@ -205,7 +220,6 @@ class AppState extends ChangeNotifier {
         return;
       }
     }
-    // Fallback for backward compatibility (pre-auth users)
     final isSuperAdmin = username == 'EIT/500/S25/038';
     final isPrefectUser = username == 'PREFECT/001';
     _currentUser = AppUser(
@@ -242,6 +256,36 @@ class AppState extends ChangeNotifier {
   }
 
   // ---- User CRUD (admin) ----
+  Future<String?> createUserViaRpc({
+    required String email,
+    required String password,
+    required String username,
+    required String fullName,
+    required String role,
+    String phone = '',
+    bool isPrefect = false,
+  }) async {
+    try {
+      await Supabase.instance.client.rpc('create_auth_user', params: {
+        'p_email': email,
+        'p_password': password,
+        'p_username': username,
+        'p_full_name': fullName,
+        'p_role': role,
+        'p_phone': phone,
+        'p_is_prefect': isPrefect,
+        'p_is_super_admin': false,
+      });
+      return null;
+    } catch (e) {
+      final msg = e.toString();
+      if (msg.contains('Only super admin')) return 'Only super admin can create users.';
+      if (msg.contains('duplicate key') && msg.contains('profiles_username_key')) return 'Username already exists.';
+      if (msg.contains('duplicate key') && msg.contains('users_email_key')) return 'Email already exists.';
+      return 'Failed to create user: ${msg.length > 60 ? msg.substring(0, 60) : msg}';
+    }
+  }
+
   void addUser(AppUser user) {
     _allUsers.add(user);
     notifyListeners();
@@ -266,76 +310,54 @@ class AppState extends ChangeNotifier {
     final nextId = _lessons.isEmpty ? 1 : _lessons.map((l) => l.id).reduce((a, b) => a > b ? a : b) + 1;
     _lessons.add(Lesson(id: nextId, subjectName: subjectName, instructor: instructor));
     notifyListeners();
+    Supabase.instance.client.from('lessons').insert({
+      'id': nextId, 'subject_name': subjectName, 'instructor': instructor,
+    }).catchError((e) => debugPrint('sync lesson fail: $e'));
   }
 
   void updateLesson(int index, String subjectName, String instructor) {
     if (index >= 0 && index < _lessons.length) {
-      _lessons[index] = Lesson(id: _lessons[index].id, subjectName: subjectName, instructor: instructor);
+      final id = _lessons[index].id;
+      _lessons[index] = Lesson(id: id, subjectName: subjectName, instructor: instructor);
       notifyListeners();
+      Supabase.instance.client.from('lessons').update({
+        'subject_name': subjectName, 'instructor': instructor,
+      }).eq('id', id).catchError((e) => debugPrint('sync lesson update fail: $e'));
     }
   }
 
   void deleteLesson(int index) {
     if (index >= 0 && index < _lessons.length) {
+      final id = _lessons[index].id;
       _lessons.removeAt(index);
       notifyListeners();
+      Supabase.instance.client.from('lessons').delete().eq('id', id)
+          .catchError((e) => debugPrint('sync lesson delete fail: $e'));
     }
   }
 
   // ---- Schedule CRUD (admin) ----
   void addScheduleEntry(ScheduleEntry entry) {
-    _schedule.add(entry);
+    final id = uuid();
+    final entryWithId = ScheduleEntry(
+      id: id, lessonId: entry.lessonId, day: entry.day,
+      time: entry.time, room: entry.room,
+    );
+    _schedule.add(entryWithId);
     notifyListeners();
+    Supabase.instance.client.from('schedules').insert(entryWithId.toJson())
+        .catchError((e) => debugPrint('sync schedule fail: $e'));
   }
 
   void deleteScheduleEntry(int index) {
     if (index >= 0 && index < _schedule.length) {
+      final sid = _schedule[index].id;
       _schedule.removeAt(index);
       notifyListeners();
-    }
-  }
-
-  // ---- Notes CRUD (admin) ----
-  void addNoteTopic(NoteTopic topic) {
-    _notes.add(topic);
-    notifyListeners();
-  }
-
-  void deleteNoteTopic(int index) {
-    if (index >= 0 && index < _notes.length) {
-      _notes.removeAt(index);
-      notifyListeners();
-    }
-  }
-
-  void addParagraph(int topicIndex, NoteParagraph para) {
-    if (topicIndex >= 0 && topicIndex < _notes.length) {
-      _notes[topicIndex].paragraphs.add(para);
-      notifyListeners();
-    }
-  }
-
-  void deleteParagraph(int topicIndex, int paraIndex) {
-    if (topicIndex >= 0 && topicIndex < _notes.length) {
-      if (paraIndex >= 0 && paraIndex < _notes[topicIndex].paragraphs.length) {
-        _notes[topicIndex].paragraphs.removeAt(paraIndex);
-        notifyListeners();
+      if (sid != null) {
+        Supabase.instance.client.from('schedules').delete().eq('id', sid)
+            .catchError((e) => debugPrint('sync schedule delete fail: $e'));
       }
-    }
-  }
-
-  // ---- Hub moderation ----
-  void deleteAnnouncement(int index) {
-    if (index >= 0 && index < announcements.length) {
-      announcements.removeAt(index);
-      notifyListeners();
-    }
-  }
-
-  void deleteDiscussion(int index) {
-    if (index >= 0 && index < discussions.length) {
-      discussions.removeAt(index);
-      notifyListeners();
     }
   }
 
@@ -344,17 +366,94 @@ class AppState extends ChangeNotifier {
     if (idx != -1) {
       _schedule[idx] = updated;
       notifyListeners();
+      if (updated.id != null) {
+        Supabase.instance.client.from('schedules').update(updated.toJson())
+            .eq('id', updated.id!).catchError((e) => debugPrint('sync schedule update fail: $e'));
+      }
+    }
+  }
+
+  // ---- Notes CRUD (admin) ----
+  void addNoteTopic(NoteTopic topic) {
+    _notes.add(topic);
+    notifyListeners();
+    Supabase.instance.client.from('note_topics').insert({
+      'id': topic.id, 'title': topic.title, 'lesson_id': _activeLessonId,
+    }).catchError((e) => debugPrint('sync topic fail: $e'));
+  }
+
+  void deleteNoteTopic(int index) {
+    if (index >= 0 && index < _notes.length) {
+      final tid = _notes[index].id;
+      _notes.removeAt(index);
+      notifyListeners();
+      Supabase.instance.client.from('note_topics').delete().eq('id', tid)
+          .catchError((e) => debugPrint('sync topic delete fail: $e'));
+    }
+  }
+
+  void addParagraph(int topicIndex, NoteParagraph para) {
+    if (topicIndex >= 0 && topicIndex < _notes.length) {
+      _notes[topicIndex].paragraphs.add(para);
+      notifyListeners();
+      Supabase.instance.client.from('note_paragraphs').insert({
+        'id': para.id, 'topic_id': para.topicId, 'text': para.text,
+      }).catchError((e) => debugPrint('sync para fail: $e'));
+    }
+  }
+
+  void deleteParagraph(int topicIndex, int paraIndex) {
+    if (topicIndex >= 0 && topicIndex < _notes.length) {
+      if (paraIndex >= 0 && paraIndex < _notes[topicIndex].paragraphs.length) {
+        final pid = _notes[topicIndex].paragraphs[paraIndex].id;
+        _notes[topicIndex].paragraphs.removeAt(paraIndex);
+        notifyListeners();
+        Supabase.instance.client.from('note_paragraphs').delete().eq('id', pid)
+            .catchError((e) => debugPrint('sync para delete fail: $e'));
+      }
+    }
+  }
+
+  // ---- Hub moderation ----
+  void deleteAnnouncement(int index) {
+    if (index >= 0 && index < _announcements.length) {
+      final aid = _announcements[index].id;
+      _announcements.removeAt(index);
+      notifyListeners();
+      Supabase.instance.client.from('announcements').delete().eq('id', aid)
+          .catchError((e) => debugPrint('sync announcement delete fail: $e'));
+    }
+  }
+
+  void deleteDiscussion(int index) {
+    if (index >= 0 && index < _discussions.length) {
+      final did = _discussions[index].id;
+      _discussions.removeAt(index);
+      notifyListeners();
+      Supabase.instance.client.from('discussions').delete().eq('id', did!)
+          .catchError((e) => debugPrint('sync discussion delete fail: $e'));
     }
   }
 
   void addAnnouncement(String text) {
-    announcements.insert(0, text);
+    final id = uuid();
+    _announcements.insert(0, Announcement(id: id, content: text));
     notifyListeners();
+    Supabase.instance.client.from('announcements').insert({
+      'id': id, 'content': text, 'created_by': _currentUser?.username,
+    }).catchError((e) => debugPrint('sync announcement fail: $e'));
   }
 
   void addDiscussion(ChatMessage msg) {
-    discussions.add(msg);
+    final id = uuid();
+    final msgWithId = ChatMessage(
+      id: id, user: msg.user, text: msg.text, timestamp: msg.timestamp,
+    );
+    _discussions.add(msgWithId);
     notifyListeners();
+    Supabase.instance.client.from('discussions').insert({
+      'id': id, 'user_name': msg.user, 'text': msg.text,
+    }).catchError((e) => debugPrint('sync discussion fail: $e'));
   }
 
   void addHighlight(NoteHighlight highlight) {
@@ -399,11 +498,17 @@ class AppState extends ChangeNotifier {
   void addDocument(AppDocument doc) {
     _documents.add(doc);
     notifyListeners();
+    Supabase.instance.client.from('documents').insert({
+      'id': doc.id, 'lesson_id': doc.lessonId, 'title': doc.title,
+      'file_type': doc.fileType, 'file_url': doc.fileUrl, 'uploaded_by': doc.uploadedBy,
+    }).catchError((e) => debugPrint('sync document fail: $e'));
   }
 
   void deleteDocument(String id) {
     _documents.removeWhere((d) => d.id == id);
     notifyListeners();
+    Supabase.instance.client.from('documents').delete().eq('id', id)
+        .catchError((e) => debugPrint('sync document delete fail: $e'));
   }
 
   // ---- Quiz CRUD ----
@@ -413,11 +518,18 @@ class AppState extends ChangeNotifier {
   void addQuiz(Quiz quiz) {
     _quizzes.add(quiz);
     notifyListeners();
+    Supabase.instance.client.from('quizzes').insert({
+      'id': quiz.id, 'lesson_id': quiz.lessonId, 'title': quiz.title,
+      'description': quiz.description, 'duration_minutes': quiz.durationMinutes,
+      'due_date': quiz.dueDate?.toIso8601String(),
+    }).catchError((e) => debugPrint('sync quiz fail: $e'));
   }
 
   void deleteQuiz(String id) {
     _quizzes.removeWhere((q) => q.id == id);
     notifyListeners();
+    Supabase.instance.client.from('quizzes').delete().eq('id', id)
+        .catchError((e) => debugPrint('sync quiz delete fail: $e'));
   }
 
   void addQuestionToQuiz(String quizId, QuizQuestion question) {
@@ -425,14 +537,24 @@ class AppState extends ChangeNotifier {
     if (idx != -1) {
       _quizzes[idx].questions.add(question);
       notifyListeners();
+      Supabase.instance.client.from('quiz_questions').insert({
+        'id': question.id, 'quiz_id': question.quizId,
+        'question_text': question.questionText,
+        'option_a': question.optionA, 'option_b': question.optionB,
+        'option_c': question.optionC, 'option_d': question.optionD,
+        'correct_answer': question.correctAnswer, 'sort_order': question.sortOrder,
+      }).catchError((e) => debugPrint('sync question fail: $e'));
     }
   }
 
   void removeQuestionFromQuiz(String quizId, int questionIndex) {
     final idx = _quizzes.indexWhere((q) => q.id == quizId);
     if (idx != -1 && questionIndex < _quizzes[idx].questions.length) {
+      final qid = _quizzes[idx].questions[questionIndex].id;
       _quizzes[idx].questions.removeAt(questionIndex);
       notifyListeners();
+      Supabase.instance.client.from('quiz_questions').delete().eq('id', qid)
+          .catchError((e) => debugPrint('sync question delete fail: $e'));
     }
   }
 
@@ -452,15 +574,24 @@ class AppState extends ChangeNotifier {
       _quizAttempts.add(attempt);
     }
     notifyListeners();
+    Supabase.instance.client.from('quiz_attempts').upsert({
+      'id': attempt.id, 'quiz_id': attempt.quizId,
+      'student_id': attempt.studentId, 'score': attempt.score,
+      'total_questions': attempt.totalQuestions, 'answers': attempt.answers,
+      'started_at': attempt.startedAt.toIso8601String(),
+      'submitted_at': attempt.submittedAt?.toIso8601String(),
+    }).catchError((e) => debugPrint('sync attempt fail: $e'));
   }
 }
 
 class ChatMessage {
+  final String? id;
   final String user;
   final String text;
   final DateTime timestamp;
 
   const ChatMessage({
+    this.id,
     required this.user,
     required this.text,
     required this.timestamp,

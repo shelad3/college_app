@@ -68,7 +68,7 @@ class _HubTabState extends State<HubTab> with SingleTickerProviderStateMixin {
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
                 leading: const Icon(Icons.campaign, color: Colors.blue),
-                title: Text(appState.announcements[index]),
+                title: Text(appState.announcements[index].content),
               ),
             ),
           ),

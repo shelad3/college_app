@@ -113,8 +113,10 @@ class _UsersPage extends StatelessWidget {
     final nameCtl = TextEditingController();
     final usernameCtl = TextEditingController();
     final phoneCtl = TextEditingController();
+    final emailCtl = TextEditingController();
     String role = 'student';
     bool isPrefect = false;
+    bool creating = false;
 
     showDialog(context: context, builder: (ctx) => StatefulBuilder(
       builder: (context, setState) => AlertDialog(
@@ -123,9 +125,11 @@ class _UsersPage extends StatelessWidget {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(controller: nameCtl, decoration: const InputDecoration(labelText: 'Full Name', border: OutlineInputBorder())),
             const SizedBox(height: 8),
-            TextField(controller: usernameCtl, decoration: const InputDecoration(labelText: 'Username / Reg No', border: OutlineInputBorder())),
+            TextField(controller: usernameCtl, decoration: const InputDecoration(labelText: 'Reg Number', border: OutlineInputBorder())),
             const SizedBox(height: 8),
-            TextField(controller: phoneCtl, decoration: const InputDecoration(labelText: 'Phone', border: OutlineInputBorder())),
+            TextField(controller: phoneCtl, decoration: const InputDecoration(labelText: 'Phone (used as password)', border: OutlineInputBorder())),
+            const SizedBox(height: 8),
+            TextField(controller: emailCtl, decoration: const InputDecoration(labelText: 'Email (optional, auto-generated if empty)', border: OutlineInputBorder())),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               initialValue: role,
@@ -142,14 +146,47 @@ class _UsersPage extends StatelessWidget {
           ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () {
-            if (nameCtl.text.isEmpty || usernameCtl.text.isEmpty) return;
-            context.read<AppState>().addUser(AppUser(
-              username: usernameCtl.text, fullName: nameCtl.text, role: role, phone: phoneCtl.text, isPrefect: isPrefect,
-            ));
-            Navigator.pop(ctx);
-          }, child: const Text('Add')),
+          TextButton(onPressed: creating ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: creating
+                ? null
+                : () async {
+                    if (nameCtl.text.isEmpty || usernameCtl.text.isEmpty || phoneCtl.text.isEmpty) return;
+                    setState(() => creating = true);
+                    final email = emailCtl.text.trim().isEmpty
+                        ? '${usernameCtl.text.trim()}@college.app'
+                        : emailCtl.text.trim();
+                    final result = await context.read<AppState>().createUserViaRpc(
+                      email: email,
+                      password: phoneCtl.text.trim(),
+                      username: usernameCtl.text.trim(),
+                      fullName: nameCtl.text.trim(),
+                      role: role,
+                      phone: phoneCtl.text.trim(),
+                      isPrefect: isPrefect,
+                    );
+                    if (ctx.mounted) {
+                      if (result == null) {
+                        context.read<AppState>().addUser(AppUser(
+                          username: usernameCtl.text,
+                          fullName: nameCtl.text,
+                          role: role,
+                          phone: phoneCtl.text,
+                          isPrefect: isPrefect,
+                        ));
+                        Navigator.pop(ctx);
+                      } else {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          SnackBar(content: Text(result)),
+                        );
+                        setState(() => creating = false);
+                      }
+                    }
+                  },
+            child: creating
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Create'),
+          ),
         ],
       ),
     ));
@@ -602,7 +639,7 @@ class _HubPage extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 6),
           child: ListTile(
             leading: const Icon(Icons.campaign, color: Colors.blue),
-            title: Text(e.value, style: const TextStyle(fontSize: 13)),
+            title: Text(e.value.content, style: const TextStyle(fontSize: 13)),
             trailing: IconButton(
               icon: const Icon(Icons.delete, size: 18, color: Colors.red),
               onPressed: () => context.read<AppState>().deleteAnnouncement(e.key),

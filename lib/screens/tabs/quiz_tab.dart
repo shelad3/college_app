@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_state.dart';
 import '../../models/quiz.dart';
+import '../../utils/uuid.dart';
 
 class QuizTab extends StatelessWidget {
   const QuizTab({super.key});
@@ -325,7 +326,7 @@ class _QuizPlayerScreenState extends State<_QuizPlayerScreen> {
     }
 
     final attempt = QuizAttempt(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: uuid(),
       quizId: quiz.id,
       studentId: context.read<AppState>().currentUser?.username ?? '',
       score: score,
@@ -396,7 +397,7 @@ class AdminQuizPage extends StatelessWidget {
           ElevatedButton(onPressed: () {
             if (titleCtl.text.isEmpty) return;
             final quiz = Quiz(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              id: uuid(),
               lessonId: appState.activeLessonId,
               title: titleCtl.text,
               description: descCtl.text.isNotEmpty ? descCtl.text : null,
@@ -509,7 +510,7 @@ class _QuestionEditorScreenState extends State<_QuestionEditorScreen> {
           ElevatedButton(onPressed: () {
             if (qTextCtl.text.isEmpty || aCtl.text.isEmpty || bCtl.text.isEmpty) return;
             context.read<AppState>().addQuestionToQuiz(widget.quiz.id, QuizQuestion(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              id: uuid(),
               quizId: widget.quiz.id,
               questionText: qTextCtl.text,
               optionA: aCtl.text,

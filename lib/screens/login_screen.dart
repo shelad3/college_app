@@ -16,39 +16,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordCtl = TextEditingController();
   String? _error;
   bool _loading = false;
-  bool _isSignUp = false;
 
-  Future<void> _handleAuth() async {
+  Future<void> _handleLogin() async {
     setState(() { _error = null; _loading = true; });
 
     try {
       final supabase = Supabase.instance.client;
-
-      if (_isSignUp) {
-        final email = _emailCtl.text.trim();
-        final password = _passwordCtl.text.trim();
-        if (!email.contains('@') && password.length < 6) {
-          setState(() { _error = 'Enter valid email and password (min 6 chars)'; _loading = false; });
-          return;
-        }
-        await supabase.auth.signUp(
-          email: email,
-          password: password,
-          data: AuthHelper.signUpMetadata(
-            username: email.split('@').first,
-            fullName: email.split('@').first,
-            role: 'student',
-          ),
-        );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Account created! You can now sign in.')),
-          );
-          setState(() { _isSignUp = false; _loading = false; });
-        }
-        return;
-      }
-
       final usernameOrEmail = _emailCtl.text.trim();
       final password = _passwordCtl.text.trim();
 
@@ -57,13 +30,10 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      // Determine if this is email or username login
       final isEmail = usernameOrEmail.contains('@');
       String email = usernameOrEmail;
 
       if (!isEmail) {
-        // Look up email by username via auth admin API or use username as email format
-        // For simplicity, try common patterns
         final response = await supabase.auth.signInWithPassword(
           email: '$usernameOrEmail@college.app',
           password: password,
@@ -132,17 +102,17 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Icon(Icons.school_rounded, size: 48, color: Theme.of(context).colorScheme.primary),
                   ),
                   const SizedBox(height: 24),
-                  Text('College Portal', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                  const Text('College Portal', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  Text(_isSignUp ? 'Create an account' : 'Sign in to continue', style: TextStyle(color: Colors.grey[600])),
+                  const Text('Sign in to continue', style: TextStyle(color: Colors.grey)),
                   const SizedBox(height: 24),
                   TextField(
                     controller: _emailCtl,
-                    decoration: InputDecoration(
-                      hintText: _isSignUp ? 'Email address' : 'Email or Registration No',
-                      labelText: _isSignUp ? 'Email' : 'Username / Email',
-                      border: const OutlineInputBorder(),
-                      prefixIcon: const Icon(Icons.person_outline),
+                    decoration: const InputDecoration(
+                      hintText: 'Email or Registration No',
+                      labelText: 'Email / Reg No',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.person_outline),
                     ),
                     keyboardType: TextInputType.emailAddress,
                   ),
@@ -151,7 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: _passwordCtl,
                     obscureText: true,
                     decoration: const InputDecoration(
-                      labelText: 'Password',
+                      labelText: 'Password (Phone Number)',
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.lock_outline),
                     ),
@@ -164,16 +134,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   SizedBox(
                     width: double.infinity, height: 48,
                     child: ElevatedButton(
-                      onPressed: _loading ? null : _handleAuth,
+                      onPressed: _loading ? null : _handleLogin,
                       child: _loading
                           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                          : Text(_isSignUp ? 'Sign Up' : 'Login', style: TextStyle(fontSize: 16)),
+                          : const Text('Login', style: TextStyle(fontSize: 16)),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: () => setState(() { _isSignUp = !_isSignUp; _error = null; }),
-                    child: Text(_isSignUp ? 'Already have an account? Sign in' : 'New student? Create account'),
                   ),
                 ],
               ),
