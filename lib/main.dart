@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:upgrader/upgrader.dart';
 import 'config/supabase_config.dart';
 import 'providers/app_state.dart';
@@ -28,10 +28,18 @@ Future<void> main() async {
   );
 
   final appState = AppState();
-  await appState.initSupabaseData();
-  final savedUsername = await appState.restoreSession();
-  if (savedUsername != null) {
-    appState.autoLogin(savedUsername);
+  await Future.wait([
+    appState.initSupabaseData(),
+  ]);
+
+  final session = Supabase.instance.client.auth.currentSession;
+  if (session != null) {
+    appState.autoLogin(session.user.email ?? '');
+  } else {
+    final savedUsername = await appState.restoreSession();
+    if (savedUsername != null) {
+      appState.autoLogin(savedUsername);
+    }
   }
 
   runApp(
@@ -62,6 +70,11 @@ class CollegeApp extends StatelessWidget {
         upgrader: upgrader,
         child: Consumer<AppState>(
           builder: (context, appState, _) {
+            if (!appState.dataLoaded) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
             if (appState.currentUser == null) {
               return const LoginScreen();
             }

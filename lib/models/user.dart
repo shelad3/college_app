@@ -1,4 +1,4 @@
-class User {
+class AppUser {
   final String username;
   final String fullName;
   final String role;
@@ -10,7 +10,7 @@ class User {
   final bool isSuperAdmin;
   final bool isPrefect;
 
-  User({
+  AppUser({
     required this.username,
     required this.fullName,
     required this.role,

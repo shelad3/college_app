@@ -7,6 +7,7 @@ import 'tabs/hub_tab.dart';
 import 'tabs/notes_tab.dart';
 import 'tabs/profile_tab.dart';
 import 'tabs/documents_tab.dart';
+import 'tabs/quiz_tab.dart';
 import 'tabs/admin_tab.dart';
 import 'tabs/prefect_tab.dart';
 import 'tutorial_overlay.dart';
@@ -54,6 +55,7 @@ class _DashboardShellState extends State<DashboardShell> {
       const TimetableTab(),
       const HubTab(),
       const NotesTab(),
+      const QuizTab(),
       const DocumentsTab(),
       const ProfileTab(),
     ];
@@ -151,6 +153,7 @@ class _DashboardShellState extends State<DashboardShell> {
           const BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Timetable'),
           const BottomNavigationBarItem(icon: Icon(Icons.forum), label: 'Hub'),
           const BottomNavigationBarItem(icon: Icon(Icons.menu_book), label: 'Notes'),
+          const BottomNavigationBarItem(icon: Icon(Icons.quiz_outlined), label: 'Quizzes'),
           const BottomNavigationBarItem(icon: Icon(Icons.folder), label: 'Documents'),
           const BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
           if (isAdmin)

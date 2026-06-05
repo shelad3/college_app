@@ -1,14 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user.dart';
 import '../models/lesson.dart';
 import '../models/schedule.dart';
 import '../models/note.dart';
 import '../models/document.dart';
+import '../models/quiz.dart';
 
 class AppState extends ChangeNotifier {
-  User? _currentUser;
+  AppUser? _currentUser;
   int _activeLessonId = 1;
   List<Lesson> _lessons = [];
   List<ScheduleEntry> _schedule = [];
@@ -16,22 +17,29 @@ class AppState extends ChangeNotifier {
   final List<NoteHighlight> _highlights = [];
   List<String> announcements = [];
   List<ChatMessage> discussions = [];
-  final List<User> _allUsers = [];
+  final List<AppUser> _allUsers = [];
   List<AppDocument> _documents = [];
+  final List<Quiz> _quizzes = [];
+  final List<QuizAttempt> _quizAttempts = [];
 
-  User? get currentUser => _currentUser;
+  AppUser? get currentUser => _currentUser;
   int get activeLessonId => _activeLessonId;
   List<Lesson> get lessons => _lessons;
   List<ScheduleEntry> get schedule => _schedule;
   List<NoteTopic> get notes => _notes;
   List<NoteHighlight> get highlights => _highlights;
-  List<User> get allUsers => _allUsers;
+  List<AppUser> get allUsers => _allUsers;
   List<AppDocument> get documents => _documents;
+  List<Quiz> get quizzes => _quizzes;
+  List<QuizAttempt> get quizAttempts => _quizAttempts;
+  List<Quiz> get activeQuizzes => _quizzes.where((q) => q.lessonId == _activeLessonId).toList();
   bool get isAdmin => _currentUser?.isSuperAdmin == true;
   bool get isPrefect => _currentUser?.isPrefect == true;
   bool get canManage => isAdmin || isPrefect;
   bool _dataLoaded = false;
   bool get dataLoaded => _dataLoaded;
+  String? _error;
+  String? get error => _error;
 
   Lesson? get activeLesson {
     try {
@@ -49,9 +57,7 @@ class AppState extends ChangeNotifier {
 
   List<NoteTopic> get activeNotes {
     final match = _allLessonsNotes.entries.where((t) => t.key == _activeLessonId).toList();
-    if (match.isNotEmpty) {
-      return match.first.value;
-    }
+    if (match.isNotEmpty) return match.first.value;
     return _notes;
   }
 
@@ -118,7 +124,6 @@ class AppState extends ChangeNotifier {
       _allLessonsNotes.addAll(byLesson);
 
       announcements = (results[4] as List).map((j) => j['content'] as String).toList();
-
       discussions = (results[5] as List).map((j) => ChatMessage(
         user: j['user_name'] as String,
         text: j['text'] as String,
@@ -134,13 +139,16 @@ class AppState extends ChangeNotifier {
         uploadedBy: j['uploaded_by'] as String?,
         createdAt: DateTime.parse(j['created_at'] as String),
       )).toList();
+
+      _error = null;
     } catch (e) {
       _lessons = [];
       _schedule = [];
       _notes = [];
-      announcements = [];
+      announcements = ['Could not load data from server. Working offline.'];
       discussions = [];
       _documents = [];
+      _error = 'Failed to load data: ${e.toString().length > 80 ? e.toString().substring(0, 80) : e.toString()}';
     }
     _dataLoaded = true;
     notifyListeners();
@@ -151,13 +159,14 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void logIn(User user) {
+  void logIn(AppUser user) {
     _currentUser = user;
     _persistSession(user.username);
     notifyListeners();
   }
 
   Future<void> logOut() async {
+    await Supabase.instance.client.auth.signOut();
     _currentUser = null;
     _activeLessonId = 1;
     final prefs = await SharedPreferences.getInstance();
@@ -167,19 +176,44 @@ class AppState extends ChangeNotifier {
   }
 
   Future<String?> restoreSession() async {
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session != null) {
+      return session.user.email;
+    }
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('saved_username');
   }
 
   void autoLogin(String username) {
+    final authUser = Supabase.instance.client.auth.currentUser;
+    if (authUser != null) {
+      final meta = authUser.userMetadata;
+      if (meta != null) {
+        _currentUser = AppUser(
+          username: meta['username'] as String? ?? username,
+          fullName: meta['full_name'] as String? ?? username,
+          role: meta['role'] as String? ?? 'student',
+          phone: meta['phone'] as String? ?? '',
+          email: authUser.email ?? '',
+          isFirstLogin: false,
+          isSuperAdmin: meta['is_super_admin'] as bool? ?? false,
+          isPrefect: meta['is_prefect'] as bool? ?? false,
+          assignedLessons: (meta['assigned_lessons'] as List<dynamic>?)?.cast<int>() ?? [],
+          profileImagePath: meta['profile_image_url'] as String?,
+        );
+        notifyListeners();
+        return;
+      }
+    }
+    // Fallback for backward compatibility (pre-auth users)
     final isSuperAdmin = username == 'EIT/500/S25/038';
     final isPrefectUser = username == 'PREFECT/001';
-    _currentUser = User(
+    _currentUser = AppUser(
       username: username,
       fullName: isSuperAdmin ? 'Sheldon Ramu' : (isPrefectUser ? 'Class Prefect' : (RegExp(r'^\d+$').hasMatch(username) ? 'Teacher User' : 'Student User')),
       role: isSuperAdmin || isPrefectUser ? 'student' : (RegExp(r'^\d+$').hasMatch(username) ? 'teacher' : 'student'),
-      phone: isSuperAdmin ? '0112327446' : (isPrefectUser ? '0112000000' : (RegExp(r'^\d+$').hasMatch(username) ? username : '0712345678')),
-      email: isSuperAdmin ? 'sheldonramu8@gmail.com' : '',
+      phone: isSuperAdmin ? '0112327446' : (isPrefectUser ? '0112000000' : ''),
+      email: '',
       isFirstLogin: false,
       isSuperAdmin: isSuperAdmin,
       isPrefect: isPrefectUser,
@@ -208,12 +242,12 @@ class AppState extends ChangeNotifier {
   }
 
   // ---- User CRUD (admin) ----
-  void addUser(User user) {
+  void addUser(AppUser user) {
     _allUsers.add(user);
     notifyListeners();
   }
 
-  void updateUser(int index, User user) {
+  void updateUser(int index, AppUser user) {
     if (index >= 0 && index < _allUsers.length) {
       _allUsers[index] = user;
       notifyListeners();
@@ -369,6 +403,54 @@ class AppState extends ChangeNotifier {
 
   void deleteDocument(String id) {
     _documents.removeWhere((d) => d.id == id);
+    notifyListeners();
+  }
+
+  // ---- Quiz CRUD ----
+  List<Quiz> quizzesForLesson(int lessonId) =>
+      _quizzes.where((q) => q.lessonId == lessonId).toList();
+
+  void addQuiz(Quiz quiz) {
+    _quizzes.add(quiz);
+    notifyListeners();
+  }
+
+  void deleteQuiz(String id) {
+    _quizzes.removeWhere((q) => q.id == id);
+    notifyListeners();
+  }
+
+  void addQuestionToQuiz(String quizId, QuizQuestion question) {
+    final idx = _quizzes.indexWhere((q) => q.id == quizId);
+    if (idx != -1) {
+      _quizzes[idx].questions.add(question);
+      notifyListeners();
+    }
+  }
+
+  void removeQuestionFromQuiz(String quizId, int questionIndex) {
+    final idx = _quizzes.indexWhere((q) => q.id == quizId);
+    if (idx != -1 && questionIndex < _quizzes[idx].questions.length) {
+      _quizzes[idx].questions.removeAt(questionIndex);
+      notifyListeners();
+    }
+  }
+
+  QuizAttempt? getAttemptForQuiz(String quizId) {
+    try {
+      return _quizAttempts.firstWhere((a) => a.quizId == quizId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void submitQuizAttempt(QuizAttempt attempt) {
+    final idx = _quizAttempts.indexWhere((a) => a.quizId == attempt.quizId);
+    if (idx != -1) {
+      _quizAttempts[idx] = attempt;
+    } else {
+      _quizAttempts.add(attempt);
+    }
     notifyListeners();
   }
 }

@@ -6,6 +6,7 @@ import '../../models/lesson.dart';
 import '../../models/schedule.dart';
 import '../../models/note.dart';
 import '../../models/document.dart';
+import 'quiz_tab.dart' show AdminQuizPage;
 
 class AdminTab extends StatefulWidget {
   const AdminTab({super.key});
@@ -20,7 +21,7 @@ class _AdminTabState extends State<AdminTab> with SingleTickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 7, vsync: this);
+    _tabController = TabController(length: 8, vsync: this);
   }
 
   @override
@@ -46,6 +47,7 @@ class _AdminTabState extends State<AdminTab> with SingleTickerProviderStateMixin
             Tab(text: 'Schedule'),
             Tab(text: 'Notes'),
             Tab(text: 'Documents'),
+            Tab(text: 'Quizzes'),
             Tab(text: 'Hub'),
           ],
         ),
@@ -59,6 +61,7 @@ class _AdminTabState extends State<AdminTab> with SingleTickerProviderStateMixin
               _SchedulePage(),
               _NotesPage(),
               _AdminDocumentsPage(),
+              AdminQuizPage(),
               _HubPage(),
             ],
           ),
@@ -94,6 +97,8 @@ class _DashboardPage extends StatelessWidget {
         _StatCard(label: 'Discussions', value: '${appState.discussions.length}', icon: Icons.chat, color: Colors.purple),
         const SizedBox(height: 8),
         _StatCard(label: 'Documents', value: '${appState.documents.length}', icon: Icons.folder, color: Colors.deepOrange),
+        const SizedBox(height: 8),
+        _StatCard(label: 'Quizzes', value: '${appState.quizzes.length}', icon: Icons.quiz, color: Colors.purple),
         const SizedBox(height: 24),
       ],
     );
@@ -140,7 +145,7 @@ class _UsersPage extends StatelessWidget {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(onPressed: () {
             if (nameCtl.text.isEmpty || usernameCtl.text.isEmpty) return;
-            context.read<AppState>().addUser(User(
+            context.read<AppState>().addUser(AppUser(
               username: usernameCtl.text, fullName: nameCtl.text, role: role, phone: phoneCtl.text, isPrefect: isPrefect,
             ));
             Navigator.pop(ctx);
@@ -150,7 +155,7 @@ class _UsersPage extends StatelessWidget {
     ));
   }
 
-  void _editUserDialog(BuildContext context, int index, User user) {
+  void _editUserDialog(BuildContext context, int index, AppUser user) {
     final nameCtl = TextEditingController(text: user.fullName);
     final usernameCtl = TextEditingController(text: user.username);
     final phoneCtl = TextEditingController(text: user.phone);
@@ -186,7 +191,7 @@ class _UsersPage extends StatelessWidget {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(onPressed: () {
             if (nameCtl.text.isEmpty) return;
-            context.read<AppState>().updateUser(index, User(
+            context.read<AppState>().updateUser(index, AppUser(
               username: usernameCtl.text, fullName: nameCtl.text, role: role, phone: phoneCtl.text, isPrefect: isPrefect,
             ));
             Navigator.pop(ctx);
