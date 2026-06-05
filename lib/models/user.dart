@@ -8,6 +8,7 @@ class User {
   List<int> assignedLessons;
   String? profileImagePath;
   final bool isSuperAdmin;
+  final bool isPrefect;
 
   User({
     required this.username,
@@ -19,5 +20,6 @@ class User {
     this.assignedLessons = const [],
     this.profileImagePath,
     this.isSuperAdmin = false,
+    this.isPrefect = false,
   });
 }

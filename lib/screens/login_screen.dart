@@ -24,11 +24,11 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // Super admin detection
     final isSuperAdmin = username == 'EIT/500/S25/038' && password == '0112327446';
+    final isPrefectUser = username == 'PREFECT/001' && password == '0112327446';
 
     String role;
-    if (isSuperAdmin) {
+    if (isSuperAdmin || isPrefectUser) {
       role = 'student';
     } else if (RegExp(r'^[A-Za-z]').hasMatch(username)) {
       role = 'student';
@@ -40,19 +40,47 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     final phone = role == 'teacher' ? username : '0712345678';
-    if (!isSuperAdmin && password != phone) {
+    if (!isSuperAdmin && !isPrefectUser && password != phone) {
       setState(() => _error = 'Invalid credentials.');
       return;
     }
 
+    String fullName;
+    if (isSuperAdmin) {
+      fullName = 'Sheldon Ramu';
+    } else if (isPrefectUser) {
+      fullName = 'Class Prefect';
+    } else if (role == 'student') {
+      fullName = 'Student User';
+    } else {
+      fullName = 'Teacher User';
+    }
+
+    String userPhone;
+    String userEmail;
+    if (isSuperAdmin) {
+      userPhone = '0112327446';
+      userEmail = 'sheldonramu8@gmail.com';
+    } else if (isPrefectUser) {
+      userPhone = '0112000000';
+      userEmail = '';
+    } else if (role == 'teacher') {
+      userPhone = username;
+      userEmail = '';
+    } else {
+      userPhone = '0712345678';
+      userEmail = '';
+    }
+
     final user = User(
       username: username,
-      fullName: isSuperAdmin ? 'Sheldon Ramu' : (role == 'student' ? 'Student User' : 'Teacher User'),
+      fullName: fullName,
       role: role,
-      phone: isSuperAdmin ? '0112327446' : phone,
-      email: isSuperAdmin ? 'sheldonramu8@gmail.com' : '',
+      phone: userPhone,
+      email: userEmail,
       isFirstLogin: false,
       isSuperAdmin: isSuperAdmin,
+      isPrefect: isPrefectUser,
       assignedLessons: role == 'teacher' ? [] : [1, 2, 3, 4],
     );
 

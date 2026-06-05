@@ -14,6 +14,8 @@ class AppState extends ChangeNotifier {
   final List<NoteHighlight> _highlights = [];
   List<String> announcements = [];
   List<ChatMessage> discussions = [];
+  List<User> _allUsers = [];
+  int _nextLessonId = 5;
 
   User? get currentUser => _currentUser;
   int get activeLessonId => _activeLessonId;
@@ -21,6 +23,10 @@ class AppState extends ChangeNotifier {
   List<ScheduleEntry> get schedule => _schedule;
   List<NoteTopic> get notes => _notes;
   List<NoteHighlight> get highlights => _highlights;
+  List<User> get allUsers => _allUsers;
+  bool get isAdmin => _currentUser?.isSuperAdmin == true;
+  bool get isPrefect => _currentUser?.isPrefect == true;
+  bool get canManage => isAdmin || isPrefect;
 
   Lesson? get activeLesson {
     try {
@@ -82,6 +88,11 @@ class AppState extends ChangeNotifier {
       ChatMessage(user: 'Student A', text: 'Has anyone completed the assignment?', timestamp: DateTime.now().subtract(const Duration(hours: 2))),
       ChatMessage(user: 'Student B', text: 'Almost done, just the last section remaining.', timestamp: DateTime.now().subtract(const Duration(hours: 1))),
     ];
+
+    _allUsers = [
+      User(username: 'EIT/500/S25/038', fullName: 'Sheldon Ramu', role: 'student', phone: '0112327446', email: 'sheldonramu8@gmail.com', isSuperAdmin: true),
+      User(username: '0712345678', fullName: 'Teacher User', role: 'teacher', phone: '0712345678', assignedLessons: [1, 2]),
+    ];
   }
 
   void setLesson(int lessonId) {
@@ -111,14 +122,16 @@ class AppState extends ChangeNotifier {
 
   void autoLogin(String username) {
     final isSuperAdmin = username == 'EIT/500/S25/038';
+    final isPrefectUser = username == 'PREFECT/001';
     _currentUser = User(
       username: username,
-      fullName: isSuperAdmin ? 'Sheldon Ramu' : (RegExp(r'^\d+$').hasMatch(username) ? 'Teacher User' : 'Student User'),
-      role: isSuperAdmin ? 'student' : (RegExp(r'^\d+$').hasMatch(username) ? 'teacher' : 'student'),
-      phone: isSuperAdmin ? '0112327446' : (RegExp(r'^\d+$').hasMatch(username) ? username : '0712345678'),
+      fullName: isSuperAdmin ? 'Sheldon Ramu' : (isPrefectUser ? 'Class Prefect' : (RegExp(r'^\d+$').hasMatch(username) ? 'Teacher User' : 'Student User')),
+      role: isSuperAdmin || isPrefectUser ? 'student' : (RegExp(r'^\d+$').hasMatch(username) ? 'teacher' : 'student'),
+      phone: isSuperAdmin ? '0112327446' : (isPrefectUser ? '0112000000' : (RegExp(r'^\d+$').hasMatch(username) ? username : '0712345678')),
       email: isSuperAdmin ? 'sheldonramu8@gmail.com' : '',
       isFirstLogin: false,
       isSuperAdmin: isSuperAdmin,
+      isPrefect: isPrefectUser,
       assignedLessons: RegExp(r'^\d+$').hasMatch(username) ? [] : [1, 2, 3, 4],
     );
     notifyListeners();
@@ -139,6 +152,103 @@ class AppState extends ChangeNotifier {
   void assignTeacherLessons(List<int> lessonIds) {
     if (_currentUser != null && _currentUser!.role == 'teacher') {
       _currentUser!.assignedLessons = lessonIds;
+      notifyListeners();
+    }
+  }
+
+  // ---- User CRUD (admin) ----
+  void addUser(User user) {
+    _allUsers.add(user);
+    notifyListeners();
+  }
+
+  void updateUser(int index, User user) {
+    if (index >= 0 && index < _allUsers.length) {
+      _allUsers[index] = user;
+      notifyListeners();
+    }
+  }
+
+  void deleteUser(int index) {
+    if (index >= 0 && index < _allUsers.length) {
+      _allUsers.removeAt(index);
+      notifyListeners();
+    }
+  }
+
+  // ---- Lesson CRUD (admin) ----
+  void addLesson(String subjectName, String instructor) {
+    _lessons.add(Lesson(id: _nextLessonId++, subjectName: subjectName, instructor: instructor));
+    notifyListeners();
+  }
+
+  void updateLesson(int index, String subjectName, String instructor) {
+    if (index >= 0 && index < _lessons.length) {
+      _lessons[index] = Lesson(id: _lessons[index].id, subjectName: subjectName, instructor: instructor);
+      notifyListeners();
+    }
+  }
+
+  void deleteLesson(int index) {
+    if (index >= 0 && index < _lessons.length) {
+      _lessons.removeAt(index);
+      notifyListeners();
+    }
+  }
+
+  // ---- Schedule CRUD (admin) ----
+  void addScheduleEntry(ScheduleEntry entry) {
+    _schedule.add(entry);
+    notifyListeners();
+  }
+
+  void deleteScheduleEntry(int index) {
+    if (index >= 0 && index < _schedule.length) {
+      _schedule.removeAt(index);
+      notifyListeners();
+    }
+  }
+
+  // ---- Notes CRUD (admin) ----
+  void addNoteTopic(NoteTopic topic) {
+    _notes.add(topic);
+    notifyListeners();
+  }
+
+  void deleteNoteTopic(int index) {
+    if (index >= 0 && index < _notes.length) {
+      _notes.removeAt(index);
+      notifyListeners();
+    }
+  }
+
+  void addParagraph(int topicIndex, NoteParagraph para) {
+    if (topicIndex >= 0 && topicIndex < _notes.length) {
+      _notes[topicIndex].paragraphs.add(para);
+      notifyListeners();
+    }
+  }
+
+  void deleteParagraph(int topicIndex, int paraIndex) {
+    if (topicIndex >= 0 && topicIndex < _notes.length) {
+      if (paraIndex >= 0 && paraIndex < _notes[topicIndex].paragraphs.length) {
+        _notes[topicIndex].paragraphs.removeAt(paraIndex);
+        notifyListeners();
+      }
+    }
+  }
+
+  // ---- Hub moderation ----
+  void deleteAnnouncement(int index) {
+    if (index >= 0 && index < announcements.length) {
+      announcements.removeAt(index);
+      notifyListeners();
+    }
+  }
+
+  void deleteDiscussion(int index) {
+    if (index >= 0 && index < discussions.length) {
+      discussions.removeAt(index);
       notifyListeners();
     }
   }

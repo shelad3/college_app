@@ -7,6 +7,7 @@ import 'tabs/hub_tab.dart';
 import 'tabs/notes_tab.dart';
 import 'tabs/profile_tab.dart';
 import 'tabs/admin_tab.dart';
+import 'tabs/prefect_tab.dart';
 import 'tutorial_overlay.dart';
 
 class DashboardShell extends StatefulWidget {
@@ -18,6 +19,7 @@ class DashboardShell extends StatefulWidget {
 
 class _DashboardShellState extends State<DashboardShell> {
   int _currentTabIndex = 0;
+
   @override
   void initState() {
     super.initState();
@@ -53,8 +55,10 @@ class _DashboardShellState extends State<DashboardShell> {
       const NotesTab(),
       const ProfileTab(),
     ];
-    if (appState.currentUser?.isSuperAdmin == true) {
+    if (appState.isAdmin) {
       tabs.add(const AdminTab());
+    } else if (appState.isPrefect) {
+      tabs.add(const PrefectTab());
     }
     return tabs;
   }
@@ -63,10 +67,12 @@ class _DashboardShellState extends State<DashboardShell> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final lesson = appState.activeLesson;
-    final isAdmin = appState.currentUser?.isSuperAdmin == true;
+    final isAdmin = appState.isAdmin;
+    final isPrefect = appState.isPrefect;
     final title = isAdmin
         ? 'Admin Panel'
-        : (lesson != null ? 'Lesson ${lesson.id}: ${lesson.subjectName}' : 'Dashboard');
+        : (isPrefect ? 'Prefect Panel'
+            : (lesson != null ? 'Lesson ${lesson.id}: ${lesson.subjectName}' : 'Dashboard'));
 
     final tabs = _buildTabs(appState);
     if (_currentTabIndex >= tabs.length) {
@@ -100,7 +106,7 @@ class _DashboardShellState extends State<DashboardShell> {
                     style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   Text(
-                    appState.currentUser?.role ?? '',
+                    '${appState.currentUser?.role ?? ''}${isAdmin ? ' • SUPER ADMIN' : ''}${isPrefect ? ' • PREFECT' : ''}',
                     style: TextStyle(color: Colors.white70, fontSize: 14),
                   ),
                 ],
@@ -146,6 +152,8 @@ class _DashboardShellState extends State<DashboardShell> {
           const BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
           if (isAdmin)
             const BottomNavigationBarItem(icon: Icon(Icons.admin_panel_settings), label: 'Admin'),
+          if (isPrefect)
+            const BottomNavigationBarItem(icon: Icon(Icons.shield), label: 'Prefect'),
         ],
       ),
     );

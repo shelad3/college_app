@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   full_name TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('student', 'teacher')),
   is_super_admin BOOLEAN DEFAULT false,
+  is_prefect BOOLEAN DEFAULT false,
   phone TEXT,
   is_first_login BOOLEAN DEFAULT true,
   assigned_lessons INT[] DEFAULT '{}',
@@ -172,7 +173,9 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'role', 'student'),
     COALESCE(NEW.raw_user_meta_data->>'phone', '')
   )
-  ON CONFLICT (id) DO NOTHING;
+  ON CONFLICT (id) DO UPDATE SET
+    is_prefect = COALESCE((NEW.raw_user_meta_data->>'is_prefect')::boolean, false),
+    is_super_admin = COALESCE((NEW.raw_user_meta_data->>'is_super_admin')::boolean, false);
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

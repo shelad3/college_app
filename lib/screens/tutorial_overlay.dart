@@ -15,8 +15,11 @@ class TutorialOverlay extends StatelessWidget {
     _TutorialItem(icon: Icons.person, label: 'Profile', index: 3,
       desc: 'View and edit your profile. Upload a profile picture, update your password, and see your account details.\n\nTeachers see a summary of which lessons they are assigned to instruct.'),
     _TutorialItem(icon: Icons.admin_panel_settings, label: 'Admin Panel', index: 4,
-      desc: 'Super admin dashboard with system overview stats, user info, and quick actions. Only visible to the super admin account.'),
+      desc: 'Super admin dashboard with 6 sub-tabs: Dashboard overview, User management (add/edit/delete), Lesson management, Schedule management, Notes management, and Hub moderation.\n\nFull CRUD access to all app data.'),
+    _TutorialItem(icon: Icons.shield, label: 'Prefect Panel', index: 5,
+      desc: 'Class prefect panel with limited management tools. Overview stats, announcement posting, and discussion moderation.\n\nPrefects can view all data but only manage announcements and discussions.'),
   ];
+
 
   @override
   Widget build(BuildContext context) {
