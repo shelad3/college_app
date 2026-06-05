@@ -8,7 +8,7 @@ void main() {
   testWidgets('Login screen renders', (WidgetTester tester) async {
     await tester.pumpWidget(
       ChangeNotifierProvider(
-        create: (_) => AppState()..initMockData(),
+        create: (_) => AppState(),
         child: const MaterialApp(home: LoginScreen()),
       ),
     );

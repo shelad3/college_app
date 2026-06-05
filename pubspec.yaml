@@ -39,6 +39,8 @@ dependencies:
   upgrader: ^13.5.0
   flutter_dotenv: ^6.0.1
   shared_preferences: ^2.5.5
+  url_launcher: ^6.3.1
+  open_filex: ^4.5.0
 
 dev_dependencies:
   flutter_test:

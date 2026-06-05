@@ -5,6 +5,7 @@ import '../../models/user.dart';
 import '../../models/lesson.dart';
 import '../../models/schedule.dart';
 import '../../models/note.dart';
+import '../../models/document.dart';
 
 class AdminTab extends StatefulWidget {
   const AdminTab({super.key});
@@ -19,7 +20,7 @@ class _AdminTabState extends State<AdminTab> with SingleTickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 7, vsync: this);
   }
 
   @override
@@ -44,6 +45,7 @@ class _AdminTabState extends State<AdminTab> with SingleTickerProviderStateMixin
             Tab(text: 'Lessons'),
             Tab(text: 'Schedule'),
             Tab(text: 'Notes'),
+            Tab(text: 'Documents'),
             Tab(text: 'Hub'),
           ],
         ),
@@ -56,6 +58,7 @@ class _AdminTabState extends State<AdminTab> with SingleTickerProviderStateMixin
               _LessonsPage(),
               _SchedulePage(),
               _NotesPage(),
+              _AdminDocumentsPage(),
               _HubPage(),
             ],
           ),
@@ -89,6 +92,8 @@ class _DashboardPage extends StatelessWidget {
         _StatCard(label: 'Announcements', value: '${appState.announcements.length}', icon: Icons.campaign, color: Colors.red),
         const SizedBox(height: 8),
         _StatCard(label: 'Discussions', value: '${appState.discussions.length}', icon: Icons.chat, color: Colors.purple),
+        const SizedBox(height: 8),
+        _StatCard(label: 'Documents', value: '${appState.documents.length}', icon: Icons.folder, color: Colors.deepOrange),
         const SizedBox(height: 24),
       ],
     );
@@ -486,6 +491,88 @@ class _NotesPage extends StatelessWidget {
                   ),
                 )),
               ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ============================================================
+// DOCUMENTS PAGE (admin)
+// ============================================================
+class _AdminDocumentsPage extends StatelessWidget {
+  void _addDocDialog(BuildContext context) {
+    final appState = context.read<AppState>();
+    final nameCtl = TextEditingController();
+    String selectedType = 'pdf';
+
+    showDialog(context: context, builder: (ctx) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Add Document'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: nameCtl, decoration: const InputDecoration(labelText: 'Document Title', border: OutlineInputBorder())),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<int>(
+            initialValue: appState.activeLessonId,
+            decoration: const InputDecoration(labelText: 'Lesson', border: OutlineInputBorder()),
+            items: appState.lessons.map((l) => DropdownMenuItem(value: l.id, child: Text('Lesson ${l.id}: ${l.subjectName}'))).toList(),
+            onChanged: (_) {},
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            initialValue: selectedType,
+            decoration: const InputDecoration(labelText: 'File Type', border: OutlineInputBorder()),
+            items: const [
+              DropdownMenuItem(value: 'pdf', child: Text('PDF')),
+              DropdownMenuItem(value: 'doc', child: Text('Word')),
+              DropdownMenuItem(value: 'xls', child: Text('Excel')),
+              DropdownMenuItem(value: 'ppt', child: Text('PowerPoint')),
+            ],
+            onChanged: (v) => setState(() => selectedType = v!),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () {
+            if (nameCtl.text.isEmpty) return;
+            appState.addDocument(AppDocument(
+              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              lessonId: appState.activeLessonId,
+              title: nameCtl.text,
+              fileType: selectedType,
+            ));
+            Navigator.pop(ctx);
+          }, child: const Text('Add')),
+        ],
+      ),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _addDocDialog(context),
+        child: const Icon(Icons.add),
+      ),
+      body: ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: appState.documents.length,
+        itemBuilder: (context, index) {
+          final d = appState.documents[index];
+          return Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              leading: CircleAvatar(child: Text('L${d.lessonId}')),
+              title: Text(d.title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+              subtitle: Text('${d.fileTypeLabel}  •  ${d.createdAt.day}/${d.createdAt.month}/${d.createdAt.year}', style: const TextStyle(fontSize: 12)),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                onPressed: () => appState.deleteDocument(d.id),
+              ),
             ),
           );
         },

@@ -12,11 +12,13 @@ class TutorialOverlay extends StatelessWidget {
       desc: 'Two feeds in one tab:\n\n• Announcements — Official notices from teachers. Students can only read; teachers can post and attach files.\n\n• Discussions — Open chat room for everyone. Ask questions, share answers, and coordinate with classmates.'),
     _TutorialItem(icon: Icons.menu_book, label: 'Notes', index: 2,
       desc: 'Browse lesson notes organized by topic. Tap a topic to open the reading canvas.\n\nTeachers can highlight text and mark it with a "Taught on" date — visible to all students.\n\nStudents can highlight any paragraph and add personal sticky notes that only they can see.'),
-    _TutorialItem(icon: Icons.person, label: 'Profile', index: 3,
+    _TutorialItem(icon: Icons.folder, label: 'Documents', index: 3,
+      desc: 'Upload and view lesson documents. Organize PDFs, Word docs, spreadsheets, and presentations by lesson.\n\nUse the filter to show documents for the active lesson. Tap a document to view details, download, or delete it.'),
+    _TutorialItem(icon: Icons.person, label: 'Profile', index: 4,
       desc: 'View and edit your profile. Upload a profile picture, update your password, and see your account details.\n\nTeachers see a summary of which lessons they are assigned to instruct.'),
-    _TutorialItem(icon: Icons.admin_panel_settings, label: 'Admin Panel', index: 4,
+    _TutorialItem(icon: Icons.admin_panel_settings, label: 'Admin Panel', index: 5,
       desc: 'Super admin dashboard with 6 sub-tabs: Dashboard overview, User management (add/edit/delete), Lesson management, Schedule management, Notes management, and Hub moderation.\n\nFull CRUD access to all app data.'),
-    _TutorialItem(icon: Icons.shield, label: 'Prefect Panel', index: 5,
+    _TutorialItem(icon: Icons.shield, label: 'Prefect Panel', index: 6,
       desc: 'Class prefect panel with limited management tools. Overview stats, announcement posting, and discussion moderation.\n\nPrefects can view all data but only manage announcements and discussions.'),
   ];
 

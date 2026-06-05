@@ -27,7 +27,8 @@ Future<void> main() async {
     ),
   );
 
-  final appState = AppState()..initMockData();
+  final appState = AppState();
+  await appState.initSupabaseData();
   final savedUsername = await appState.restoreSession();
   if (savedUsername != null) {
     appState.autoLogin(savedUsername);

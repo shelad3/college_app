@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../models/user.dart';
 import '../models/lesson.dart';
 import '../models/schedule.dart';
 import '../models/note.dart';
+import '../models/document.dart';
 
 class AppState extends ChangeNotifier {
   User? _currentUser;
@@ -14,8 +16,8 @@ class AppState extends ChangeNotifier {
   final List<NoteHighlight> _highlights = [];
   List<String> announcements = [];
   List<ChatMessage> discussions = [];
-  List<User> _allUsers = [];
-  int _nextLessonId = 5;
+  final List<User> _allUsers = [];
+  List<AppDocument> _documents = [];
 
   User? get currentUser => _currentUser;
   int get activeLessonId => _activeLessonId;
@@ -24,9 +26,12 @@ class AppState extends ChangeNotifier {
   List<NoteTopic> get notes => _notes;
   List<NoteHighlight> get highlights => _highlights;
   List<User> get allUsers => _allUsers;
+  List<AppDocument> get documents => _documents;
   bool get isAdmin => _currentUser?.isSuperAdmin == true;
   bool get isPrefect => _currentUser?.isPrefect == true;
   bool get canManage => isAdmin || isPrefect;
+  bool _dataLoaded = false;
+  bool get dataLoaded => _dataLoaded;
 
   Lesson? get activeLesson {
     try {
@@ -39,60 +44,106 @@ class AppState extends ChangeNotifier {
   List<ScheduleEntry> get activeSchedule =>
       _schedule.where((s) => s.lessonId == _activeLessonId).toList();
 
-  void initMockData() {
-    _lessons = [
-      const Lesson(id: 1, subjectName: 'Electrical Principles & Circuits', instructor: 'Instructor A'),
-      const Lesson(id: 2, subjectName: 'Electronics & Telecommunications', instructor: 'Instructor B'),
-      const Lesson(id: 3, subjectName: 'Computer Logic & Microprocessors', instructor: 'Instructor C'),
-      const Lesson(id: 4, subjectName: 'Practical Systems & Labs', instructor: 'Instructor D'),
-    ];
+  List<AppDocument> get activeDocuments =>
+      _documents.where((d) => d.lessonId == _activeLessonId).toList();
 
-    _schedule = [
-      ScheduleEntry(lessonId: 1, day: 'Monday', time: '08:00 - 10:00', room: 'Lab 101'),
-      ScheduleEntry(lessonId: 1, day: 'Wednesday', time: '10:00 - 12:00', room: 'Room 203'),
-      ScheduleEntry(lessonId: 2, day: 'Tuesday', time: '09:00 - 11:00', room: 'Lab 102'),
-      ScheduleEntry(lessonId: 2, day: 'Thursday', time: '14:00 - 16:00', room: 'Room 205'),
-      ScheduleEntry(lessonId: 3, day: 'Monday', time: '13:00 - 15:00', room: 'Lab 103'),
-      ScheduleEntry(lessonId: 3, day: 'Wednesday', time: '08:00 - 10:00', room: 'Room 207'),
-      ScheduleEntry(lessonId: 4, day: 'Friday', time: '08:00 - 12:00', room: 'Main Lab'),
-      ScheduleEntry(lessonId: 4, day: 'Tuesday', time: '13:00 - 15:00', room: 'Room 209'),
-    ];
+  List<NoteTopic> get activeNotes {
+    final match = _allLessonsNotes.entries.where((t) => t.key == _activeLessonId).toList();
+    if (match.isNotEmpty) {
+      return match.first.value;
+    }
+    return _notes;
+  }
 
-    _notes = [
-      NoteTopic(
-        id: 't1',
-        title: 'Topic 1: Practical Verification',
-        paragraphs: [
-          NoteParagraph(id: 'p1', text: 'Verification is the process of confirming that a system meets its specified requirements. In practical engineering, this involves systematic testing and measurement of circuit behavior against theoretical predictions.', topicId: 't1'),
-          NoteParagraph(id: 'p2', text: 'The verification methodology includes both simulation-based approaches and physical measurements using oscilloscopes, multimeters, and signal analyzers.', topicId: 't1'),
-          NoteParagraph(id: 'p3', text: 'Key verification metrics include signal integrity, power consumption, timing analysis, and thermal characteristics under normal and stress conditions.', topicId: 't1'),
-        ],
-      ),
-      NoteTopic(
-        id: 't2',
-        title: 'Topic 2: System Architecture Code',
-        paragraphs: [
-          NoteParagraph(id: 'p4', text: 'System architecture defines the fundamental organization of a system, embodied in its components, their relationships to each other and to the environment, and the principles guiding its design and evolution.', topicId: 't2'),
-          NoteParagraph(id: 'p5', text: 'Modern embedded systems architecture follows a layered approach: hardware abstraction layer, operating system layer, application framework, and user interface.', topicId: 't2'),
-          NoteParagraph(id: 'p6', text: 'Code architecture patterns such as MVC, MVVM, and clean architecture help maintain separation of concerns and testability in complex systems.', topicId: 't2'),
-        ],
-      ),
-    ];
+  final Map<int, List<NoteTopic>> _allLessonsNotes = {};
 
-    announcements = [
-      'Welcome to the new semester!',
-      'Lab safety briefing this Friday at 9:00 AM.',
-    ];
+  Future<void> initSupabaseData() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final results = await Future.wait([
+        supabase.from('lessons').select(),
+        supabase.from('schedules').select(),
+        supabase.from('note_topics').select(),
+        supabase.from('note_paragraphs').select(),
+        supabase.from('announcements').select().order('created_at', ascending: false),
+        supabase.from('discussions').select().order('created_at', ascending: false),
+        supabase.from('documents').select().order('created_at', ascending: false),
+      ]);
 
-    discussions = [
-      ChatMessage(user: 'Student A', text: 'Has anyone completed the assignment?', timestamp: DateTime.now().subtract(const Duration(hours: 2))),
-      ChatMessage(user: 'Student B', text: 'Almost done, just the last section remaining.', timestamp: DateTime.now().subtract(const Duration(hours: 1))),
-    ];
+      _lessons = (results[0] as List).map((json) => Lesson(
+        id: json['id'] as int,
+        subjectName: json['subject_name'] as String,
+        instructor: json['instructor'] as String,
+      )).toList();
 
-    _allUsers = [
-      User(username: 'EIT/500/S25/038', fullName: 'Sheldon Ramu', role: 'student', phone: '0112327446', email: 'sheldonramu8@gmail.com', isSuperAdmin: true),
-      User(username: '0712345678', fullName: 'Teacher User', role: 'teacher', phone: '0712345678', assignedLessons: [1, 2]),
-    ];
+      _schedule = (results[1] as List).map((json) => ScheduleEntry(
+        lessonId: json['lesson_id'] as int,
+        day: json['day'] as String,
+        time: json['time'] as String,
+        room: json['room'] as String,
+        isShifted: json['is_shifted'] as bool? ?? false,
+        shiftedTime: json['shifted_time'] as String?,
+        shiftedRoom: json['shifted_room'] as String?,
+        shiftedDate: json['shifted_date'] as String?,
+      )).toList();
+
+      final topicsJson = results[2] as List;
+      final paragraphsJson = results[3] as List;
+
+      final paragraphsByTopic = <String, List<NoteParagraph>>{};
+      for (final p in paragraphsJson) {
+        final topicId = p['topic_id'] as String;
+        paragraphsByTopic.putIfAbsent(topicId, () => []);
+        paragraphsByTopic[topicId]!.add(NoteParagraph(
+          id: p['id'] as String,
+          text: p['text'] as String,
+          topicId: topicId,
+          taughtDate: p['taught_date'] != null ? DateTime.tryParse(p['taught_date'] as String) : null,
+        ));
+      }
+
+      final Map<int, List<NoteTopic>> byLesson = {};
+      for (final t in topicsJson) {
+        final topicId = t['id'] as String;
+        final topic = NoteTopic(
+          id: topicId,
+          title: t['title'] as String,
+          paragraphs: paragraphsByTopic[topicId] ?? [],
+        );
+        _notes.add(topic);
+        final lessonId = t['lesson_id'] as int? ?? 1;
+        byLesson.putIfAbsent(lessonId, () => []);
+        byLesson[lessonId]!.add(topic);
+      }
+      _allLessonsNotes.addAll(byLesson);
+
+      announcements = (results[4] as List).map((j) => j['content'] as String).toList();
+
+      discussions = (results[5] as List).map((j) => ChatMessage(
+        user: j['user_name'] as String,
+        text: j['text'] as String,
+        timestamp: DateTime.parse(j['created_at'] as String),
+      )).toList();
+
+      _documents = (results[6] as List).map((j) => AppDocument(
+        id: j['id'] as String,
+        lessonId: j['lesson_id'] as int,
+        title: j['title'] as String,
+        fileType: j['file_type'] as String,
+        fileUrl: j['file_url'] as String?,
+        uploadedBy: j['uploaded_by'] as String?,
+        createdAt: DateTime.parse(j['created_at'] as String),
+      )).toList();
+    } catch (e) {
+      _lessons = [];
+      _schedule = [];
+      _notes = [];
+      announcements = [];
+      discussions = [];
+      _documents = [];
+    }
+    _dataLoaded = true;
+    notifyListeners();
   }
 
   void setLesson(int lessonId) {
@@ -178,7 +229,8 @@ class AppState extends ChangeNotifier {
 
   // ---- Lesson CRUD (admin) ----
   void addLesson(String subjectName, String instructor) {
-    _lessons.add(Lesson(id: _nextLessonId++, subjectName: subjectName, instructor: instructor));
+    final nextId = _lessons.isEmpty ? 1 : _lessons.map((l) => l.id).reduce((a, b) => a > b ? a : b) + 1;
+    _lessons.add(Lesson(id: nextId, subjectName: subjectName, instructor: instructor));
     notifyListeners();
   }
 
@@ -307,6 +359,17 @@ class AppState extends ChangeNotifier {
       _currentUser!.profileImagePath = path;
       notifyListeners();
     }
+  }
+
+  // ---- Document CRUD ----
+  void addDocument(AppDocument doc) {
+    _documents.add(doc);
+    notifyListeners();
+  }
+
+  void deleteDocument(String id) {
+    _documents.removeWhere((d) => d.id == id);
+    notifyListeners();
   }
 }
 
