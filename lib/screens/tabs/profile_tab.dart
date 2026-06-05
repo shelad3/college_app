@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/app_state.dart';
+import '../tutorial_overlay.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -181,7 +183,29 @@ class _ProfileTabState extends State<ProfileTab> {
               ),
             ),
           ],
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('tutorial_seen', false);
+                if (context.mounted) {
+                  showDialog(
+                    context: context,
+                    builder: (_) => const TutorialOverlay(onNavigateToTab: null),
+                  );
+                }
+              },
+              icon: const Icon(Icons.help_outline),
+              label: const Text('Show Tutorial'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: TextButton(

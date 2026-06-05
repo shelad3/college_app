@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/app_state.dart';
 import 'tabs/timetable_tab.dart';
 import 'tabs/hub_tab.dart';
 import 'tabs/notes_tab.dart';
 import 'tabs/profile_tab.dart';
 import 'tabs/admin_tab.dart';
+import 'tutorial_overlay.dart';
 
 class DashboardShell extends StatefulWidget {
   const DashboardShell({super.key});
@@ -16,6 +18,33 @@ class DashboardShell extends StatefulWidget {
 
 class _DashboardShellState extends State<DashboardShell> {
   int _currentTabIndex = 0;
+  @override
+  void initState() {
+    super.initState();
+    _checkTutorial();
+  }
+
+  Future<void> _checkTutorial() async {
+    final prefs = await SharedPreferences.getInstance();
+    final seen = prefs.getBool('tutorial_seen') ?? false;
+    if (!seen && mounted) {
+      _showTutorial();
+    }
+  }
+
+  Future<void> _showTutorial() async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => TutorialOverlay(
+        onNavigateToTab: (index) {
+          setState(() => _currentTabIndex = index);
+        },
+      ),
+    );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('tutorial_seen', true);
+  }
 
   List<Widget> _buildTabs(AppState appState) {
     final tabs = <Widget>[

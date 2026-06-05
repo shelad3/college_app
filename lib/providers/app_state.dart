@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user.dart';
 import '../models/lesson.dart';
 import '../models/schedule.dart';
@@ -90,13 +91,42 @@ class AppState extends ChangeNotifier {
 
   void logIn(User user) {
     _currentUser = user;
+    _persistSession(user.username);
     notifyListeners();
   }
 
-  void logOut() {
+  Future<void> logOut() async {
     _currentUser = null;
     _activeLessonId = 1;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('saved_username');
+    await prefs.remove('tutorial_seen');
     notifyListeners();
+  }
+
+  Future<String?> restoreSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('saved_username');
+  }
+
+  void autoLogin(String username) {
+    final isSuperAdmin = username == 'EIT/500/S25/038';
+    _currentUser = User(
+      username: username,
+      fullName: isSuperAdmin ? 'Sheldon Ramu' : (RegExp(r'^\d+$').hasMatch(username) ? 'Teacher User' : 'Student User'),
+      role: isSuperAdmin ? 'student' : (RegExp(r'^\d+$').hasMatch(username) ? 'teacher' : 'student'),
+      phone: isSuperAdmin ? '0112327446' : (RegExp(r'^\d+$').hasMatch(username) ? username : '0712345678'),
+      email: isSuperAdmin ? 'sheldonramu8@gmail.com' : '',
+      isFirstLogin: false,
+      isSuperAdmin: isSuperAdmin,
+      assignedLessons: RegExp(r'^\d+$').hasMatch(username) ? [] : [1, 2, 3, 4],
+    );
+    notifyListeners();
+  }
+
+  Future<void> _persistSession(String username) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('saved_username', username);
   }
 
   void completeFirstLogin(String newPassword) {

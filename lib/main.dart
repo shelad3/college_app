@@ -27,10 +27,16 @@ Future<void> main() async {
     ),
   );
 
+  final appState = AppState()..initMockData();
+  final savedUsername = await appState.restoreSession();
+  if (savedUsername != null) {
+    appState.autoLogin(savedUsername);
+  }
+
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AppState()..initMockData()),
+        ChangeNotifierProvider.value(value: appState),
       ],
       child: CollegeApp(upgrader: upgrader),
     ),
