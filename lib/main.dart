@@ -18,7 +18,7 @@ Future<void> main() async {
   );
 
   final appcastURL =
-      'https://raw.githubusercontent.com/${UpdateConfig.repoOwner}/${UpdateConfig.repoName}/main/appcast.xml';
+      'https://raw.githubusercontent.com/${UpdateConfig.repoOwner}/${UpdateConfig.repoName}/master/appcast.xml';
   final upgrader = Upgrader(
     debugLogging: true,
     storeController: UpgraderStoreController(
