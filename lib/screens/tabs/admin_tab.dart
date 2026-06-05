@@ -1,11 +1,14 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../providers/app_state.dart';
 import '../../models/user.dart';
 import '../../models/lesson.dart';
 import '../../models/schedule.dart';
 import '../../models/note.dart';
 import '../../models/document.dart';
+import '../../utils/uuid.dart';
 import 'quiz_tab.dart' show AdminQuizPage;
 
 class AdminTab extends StatefulWidget {
@@ -373,7 +376,7 @@ class _LessonsPage extends StatelessWidget {
                 children: [
                   IconButton(icon: const Icon(Icons.edit, size: 18), onPressed: () => _editLessonDialog(context, index, l)),
                   IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), onPressed: () {
-                    context.read<AppState>().deleteLesson(index);
+                    context.read<AppState>().deleteLesson(index).catchError((_) {});
                   }),
                 ],
               ),
@@ -548,45 +551,104 @@ class _AdminDocumentsPage extends StatelessWidget {
   void _addDocDialog(BuildContext context) {
     final appState = context.read<AppState>();
     final nameCtl = TextEditingController();
+    int lessonId = appState.activeLessonId;
     String selectedType = 'pdf';
+    String? selectedFileName;
+    Uint8List? selectedFileBytes;
+    bool uploading = false;
 
     showDialog(context: context, builder: (ctx) => StatefulBuilder(
       builder: (context, setState) => AlertDialog(
-        title: const Text('Add Document'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: nameCtl, decoration: const InputDecoration(labelText: 'Document Title', border: OutlineInputBorder())),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<int>(
-            initialValue: appState.activeLessonId,
-            decoration: const InputDecoration(labelText: 'Lesson', border: OutlineInputBorder()),
-            items: appState.lessons.map((l) => DropdownMenuItem(value: l.id, child: Text('Lesson ${l.id}: ${l.subjectName}'))).toList(),
-            onChanged: (_) {},
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: selectedType,
-            decoration: const InputDecoration(labelText: 'File Type', border: OutlineInputBorder()),
-            items: const [
-              DropdownMenuItem(value: 'pdf', child: Text('PDF')),
-              DropdownMenuItem(value: 'doc', child: Text('Word')),
-              DropdownMenuItem(value: 'xls', child: Text('Excel')),
-              DropdownMenuItem(value: 'ppt', child: Text('PowerPoint')),
-            ],
-            onChanged: (v) => setState(() => selectedType = v!),
-          ),
-        ]),
+        title: const Text('Upload Document'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: nameCtl, decoration: const InputDecoration(labelText: 'Document Title', border: OutlineInputBorder())),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<int>(
+              initialValue: lessonId,
+              decoration: const InputDecoration(labelText: 'Lesson', border: OutlineInputBorder()),
+              items: appState.lessons.map((l) => DropdownMenuItem(value: l.id, child: Text('Lesson ${l.id}: ${l.subjectName}'))).toList(),
+              onChanged: (v) => setState(() => lessonId = v!),
+            ),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: uploading ? null : () async {
+                final result = await FilePicker.platform.pickFiles(
+                  type: FileType.custom,
+                  allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'],
+                );
+                if (result != null && result.files.isNotEmpty) {
+                  final file = result.files.first;
+                  setState(() {
+                    selectedFileName = file.name;
+                    selectedFileBytes = file.bytes;
+                    final ext = file.extension?.toLowerCase() ?? '';
+                    if (ext == 'pdf') { selectedType = 'pdf'; }
+                    else if (['doc', 'docx'].contains(ext)) { selectedType = 'doc'; }
+                    else if (['xls', 'xlsx'].contains(ext)) { selectedType = 'xls'; }
+                    else if (['ppt', 'pptx'].contains(ext)) { selectedType = 'ppt'; }
+                  });
+                }
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: selectedFileName != null ? Colors.green.shade300 : Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(8),
+                  color: selectedFileName != null ? Colors.green.shade50 : null,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(selectedFileName != null ? Icons.check_circle : Icons.cloud_upload,
+                         color: selectedFileName != null ? Colors.green : Colors.grey[400]),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        selectedFileName ?? 'Tap to select file',
+                        style: TextStyle(color: selectedFileName != null ? Colors.green[700] : Colors.grey[500]),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ]),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () {
-            if (nameCtl.text.isEmpty) return;
-            appState.addDocument(AppDocument(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
-              lessonId: appState.activeLessonId,
-              title: nameCtl.text,
-              fileType: selectedType,
-            ));
-            Navigator.pop(ctx);
-          }, child: const Text('Add')),
+          TextButton(onPressed: uploading ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: uploading || nameCtl.text.isEmpty || selectedFileBytes == null
+                ? null
+                : () async {
+                    setState(() => uploading = true);
+                    final url = await appState.uploadDocumentFile(
+                      selectedFileName!, selectedFileBytes!, lessonId,
+                    );
+                    if (ctx.mounted) {
+                      if (url != null) {
+                        appState.addDocument(AppDocument(
+                          id: uuid(), lessonId: lessonId,
+                          title: nameCtl.text, fileType: selectedType,
+                          fileUrl: url,
+                          uploadedBy: appState.currentUser?.fullName,
+                        ));
+                        Navigator.pop(ctx);
+                      } else {
+                        setState(() => uploading = false);
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(content: Text('Upload failed. Check storage setup.')),
+                        );
+                      }
+                    }
+                  },
+            child: uploading
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Upload'),
+          ),
         ],
       ),
     ));

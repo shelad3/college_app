@@ -326,13 +326,17 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  void deleteLesson(int index) {
+  Future<void> deleteLesson(int index) async {
     if (index >= 0 && index < _lessons.length) {
       final id = _lessons[index].id;
       _lessons.removeAt(index);
       notifyListeners();
-      Supabase.instance.client.from('lessons').delete().eq('id', id)
-          .catchError((e) => debugPrint('sync lesson delete fail: $e'));
+      try {
+        await Supabase.instance.client.from('lessons').delete().eq('id', id);
+      } catch (e) {
+        debugPrint('sync lesson delete fail: $e');
+        initSupabaseData();
+      }
     }
   }
 
@@ -504,11 +508,47 @@ class AppState extends ChangeNotifier {
     }).catchError((e) => debugPrint('sync document fail: $e'));
   }
 
+  Future<String?> uploadDocumentFile(String fileName, Uint8List bytes, int lessonId) async {
+    try {
+      final storagePath = '$lessonId/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+      await Supabase.instance.client.storage.from('documents').uploadBinary(
+        storagePath, bytes,
+        fileOptions: FileOptions(upsert: true),
+      );
+      return Supabase.instance.client.storage.from('documents').getPublicUrl(storagePath);
+    } catch (e) {
+      debugPrint('Upload fail: $e');
+      return null;
+    }
+  }
+
+  Future<void> _deleteStorageFile(String fileUrl) async {
+    try {
+      final uri = Uri.parse(fileUrl);
+      final segs = uri.pathSegments;
+      final bucketIdx = segs.indexOf('documents');
+      if (bucketIdx != -1 && bucketIdx + 1 < segs.length) {
+        final path = segs.sublist(bucketIdx + 1).join('/');
+        await Supabase.instance.client.storage.from('documents').remove([path]);
+      }
+    } catch (e) {
+      debugPrint('Storage delete fail: $e');
+    }
+  }
+
   void deleteDocument(String id) {
-    _documents.removeWhere((d) => d.id == id);
+    String? fileUrl;
+    final idx = _documents.indexWhere((d) => d.id == id);
+    if (idx != -1) {
+      fileUrl = _documents[idx].fileUrl;
+      _documents.removeAt(idx);
+    }
     notifyListeners();
     Supabase.instance.client.from('documents').delete().eq('id', id)
         .catchError((e) => debugPrint('sync document delete fail: $e'));
+    if (fileUrl != null && fileUrl.isNotEmpty) {
+      _deleteStorageFile(fileUrl);
+    }
   }
 
   // ---- Quiz CRUD ----

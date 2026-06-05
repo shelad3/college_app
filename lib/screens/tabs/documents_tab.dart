@@ -1,8 +1,11 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../providers/app_state.dart';
 import '../../models/document.dart';
+import '../../utils/uuid.dart';
 
 class DocumentsTab extends StatelessWidget {
   const DocumentsTab({super.key});
@@ -73,71 +76,110 @@ class DocumentsTab extends StatelessWidget {
   void _uploadDialog(BuildContext context) {
     final appState = context.read<AppState>();
     final nameCtl = TextEditingController();
+    String? selectedFileName;
+    Uint8List? selectedFileBytes;
     String selectedType = 'pdf';
+    bool uploading = false;
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           title: const Text('Upload Document'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtl,
-                decoration: const InputDecoration(
-                  labelText: 'Document Title',
-                  hintText: 'e.g. Chapter 5 Notes',
-                  border: OutlineInputBorder(),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtl,
+                  decoration: const InputDecoration(
+                    labelText: 'Document Title',
+                    hintText: 'e.g. Chapter 5 Notes',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: selectedType,
-                decoration: const InputDecoration(labelText: 'File Type', border: OutlineInputBorder()),
-                items: const [
-                  DropdownMenuItem(value: 'pdf', child: Text('PDF Document')),
-                  DropdownMenuItem(value: 'doc', child: Text('Word Document')),
-                  DropdownMenuItem(value: 'xls', child: Text('Excel Spreadsheet')),
-                  DropdownMenuItem(value: 'ppt', child: Text('PowerPoint')),
-                ],
-                onChanged: (v) => setState(() => selectedType = v!),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
-                  borderRadius: BorderRadius.circular(8),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: uploading ? null : () async {
+                    final result = await FilePicker.platform.pickFiles(
+                      type: FileType.custom,
+                      allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'],
+                    );
+                    if (result != null && result.files.isNotEmpty) {
+                      final file = result.files.first;
+                      setState(() {
+                        selectedFileName = file.name;
+                        selectedFileBytes = file.bytes;
+                        final ext = file.extension?.toLowerCase() ?? '';
+                        if (ext == 'pdf') { selectedType = 'pdf'; }
+                        else if (['doc', 'docx'].contains(ext)) { selectedType = 'doc'; }
+                        else if (['xls', 'xlsx'].contains(ext)) { selectedType = 'xls'; }
+                        else if (['ppt', 'pptx'].contains(ext)) { selectedType = 'ppt'; }
+                      });
+                    }
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: selectedFileName != null ? Colors.green.shade300 : Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(8),
+                      color: selectedFileName != null ? Colors.green.shade50 : null,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(selectedFileName != null ? Icons.check_circle : Icons.cloud_upload,
+                             color: selectedFileName != null ? Colors.green : Colors.grey[400]),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            selectedFileName ?? 'Tap to select file',
+                            style: TextStyle(color: selectedFileName != null ? Colors.green[700] : Colors.grey[500]),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.cloud_upload, color: Colors.grey[400]),
-                    const SizedBox(width: 8),
-                    Text('Tap to select file', style: TextStyle(color: Colors.grey[500])),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(onPressed: uploading ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
-              onPressed: () {
-                if (nameCtl.text.isEmpty) return;
-                appState.addDocument(AppDocument(
-                  id: DateTime.now().millisecondsSinceEpoch.toString(),
-                  lessonId: appState.activeLessonId,
-                  title: nameCtl.text,
-                  fileType: selectedType,
-                ));
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Document added')),
-                );
-              },
-              child: const Text('Upload'),
+              onPressed: uploading || nameCtl.text.isEmpty || selectedFileBytes == null
+                  ? null
+                  : () async {
+                      setState(() => uploading = true);
+                      final url = await appState.uploadDocumentFile(
+                        selectedFileName!, selectedFileBytes!, appState.activeLessonId,
+                      );
+                      if (ctx.mounted) {
+                        if (url != null) {
+                          appState.addDocument(AppDocument(
+                            id: uuid(), lessonId: appState.activeLessonId,
+                            title: nameCtl.text, fileType: selectedType,
+                            fileUrl: url,
+                            uploadedBy: appState.currentUser?.fullName,
+                          ));
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Document uploaded')),
+                          );
+                        } else {
+                          setState(() => uploading = false);
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            const SnackBar(content: Text('Upload failed. Check storage setup.')),
+                          );
+                        }
+                      }
+                    },
+              child: uploading
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Upload'),
             ),
           ],
         ),
