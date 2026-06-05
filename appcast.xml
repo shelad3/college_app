@@ -6,7 +6,7 @@
       <title>Version 1.0.0</title>
       <description>Initial release of College Portal app.</description>
       <pubDate>Mon, 01 Jun 2026 00:00:00 +0000</pubDate>
-      <enclosure url="https://github.com/shelad3/college_app/releases/download/v1.0.0/app-release.apk"
+      <enclosure url="https://github.com/shelad3/college_app/releases/download/v1.0.0/CollegePortal-v1.0.0.apk"
                  sparkle:version="1.0.0"
                  sparkle:shortVersionString="1.0.0"
                  type="application/octet-stream"/>
